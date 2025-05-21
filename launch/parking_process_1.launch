@@ -1,0 +1,32 @@
+<launch>
+    <!-- 定义车辆长度和宽度参数 -->
+    <arg name="length" default="6.4" />
+    <arg name="width" default="2.4" />
+    <arg name="draw_flag" default="false" />
+
+    <!-- 启动停车服务节点，并传递计算后的参数 -->
+    <node name="parking_service" pkg="map_file" type="parking_service" output="screen">
+        <param name="front_right_x" value="$(eval arg('length') / 2)" />
+        <param name="front_right_y" value="$(eval -arg('width') / 2)" />
+        <param name="rear_right_x" value="$(eval -arg('length') / 2)" />
+        <param name="rear_right_y" value="$(eval -arg('width') / 2)" />
+        <param name="rear_left_x" value="$(eval -arg('length') / 2)" />
+        <param name="rear_left_y" value="$(eval arg('width') / 2)" />
+        <param name="front_left_x" value="$(eval arg('length') / 2)" />
+        <param name="front_left_y" value="$(eval arg('width') / 2)" />
+        <param name="draw_flag" value="$(arg draw_flag)" />
+    </node>
+    
+    <!-- 测试时客户端传给服务端的车辆位姿 -->
+    <arg name="x_set" default="51" />
+    <arg name="y_set" default="-2.97" />
+    <arg name="yaw_set" default="180" />
+    <!-- 延迟 2 秒后启动停车客户端节点 （debug时不延迟启动）-->
+    <!-- <node name="parking_client" pkg="map_file" type="parking_client" output="screen" respawn="false" launch-prefix="bash -c 'sleep 2; $0 $@'"/> -->
+    <node name="parking_client" pkg="map_file" type="parking_client" output="screen">
+        <param name="yaw_set" value="$(eval yaw_set)" />
+        <param name="x_set" value="$(eval x_set)" />
+        <param name="y_set" value="$(eval y_set)" />
+    </node>
+
+</launch>

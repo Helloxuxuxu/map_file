@@ -1,0 +1,22 @@
+{
+    "length": 4.5,
+    "width": 2.0,
+    "corners": {
+        "front_right": {
+            "x": 2.25,
+            "y": 1.0
+        },
+        "rear_right": {
+            "x": 2.25,
+            "y": -1.0
+        },
+        "rear_left": {
+            "x": -2.25,
+            "y": -1.0
+        },
+        "front_left": {
+            "x": -2.25,
+            "y": 1.0
+        }
+    }
+}

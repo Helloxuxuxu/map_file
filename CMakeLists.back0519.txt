@@ -1,0 +1,206 @@
+# cmake_minimum_required(VERSION 2.8.3)
+cmake_minimum_required(VERSION 3.10)
+project(map_file_parking)
+
+set(CMAKE_BUILD_TYPE Debug)
+if(NOT CMAKE_CXX_STANDARD)
+    set(CMAKE_CXX_STANDARD 17)
+endif()
+# add_compile_options(-g -O0)  
+add_compile_options(-g -O0 -std=c++17) # -O0 禁用优化，-g 添加调试符号
+
+### matplot
+# 设置 Python 和 NumPy 路径
+if(NOT CMAKE_CXX_STANDARD)
+    set(CMAKE_CXX_STANDARD 14)
+endif()
+
+set(PYTHON_INCLUDE_DIR /home/nihao/miniforge3/envs/py38/include/python3.8)
+set(NUMPY_INCLUDE_DIR /home/nihao/miniforge3/envs/py38/lib/python3.8/site-packages/numpy/core/include)
+set(PYTHON_LIBRARY /home/nihao/miniforge3/envs/py38/lib)
+set(Python3_EXECUTABLE /home/nihao/miniforge3/envs/py38/bin/python3.8)
+find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+
+message(STATUS "Python3 Interpreter: ${Python3_EXECUTABLE}")
+message(STATUS "Python3 Include Directory: ${PYTHON_INCLUDE_DIR}")
+message(STATUS "Python3 Library: ${PYTHON_LIBRARY}")
+message(STATUS "NumPy Include Directory: ${NUMPY_INCLUDE_DIR}")
+### matplot end
+
+find_package(autoware_build_flags REQUIRED)
+
+find_package(catkin REQUIRED COMPONENTS
+  autoware_msgs
+  geometry_msgs
+  lanelet2_extension
+  pcl_ros
+  roscpp
+  std_msgs
+  tf
+  tf2_geometry_msgs
+  tf2_ros
+  vector_map
+  visualization_msgs
+  nav_msgs
+)
+
+find_package(PCL REQUIRED COMPONENTS io)
+find_package(Boost REQUIRED COMPONENTS filesystem)
+
+# See: https://github.com/ros-perception/perception_pcl/blob/lunar-devel/pcl_ros/CMakeLists.txt#L10-L22
+if(NOT "${PCL_LIBRARIES}" STREQUAL "")
+  # FIXME: this causes duplicates and not found error in ubuntu:zesty
+  list(REMOVE_ITEM PCL_LIBRARIES "/usr/lib/libmpi.so")
+
+  # For debian: https://github.com/ros-perception/perception_pcl/issues/139
+  list(REMOVE_ITEM PCL_IO_LIBRARIES
+    "vtkGUISupportQt"
+    "vtkGUISupportQtOpenGL"
+    "vtkGUISupportQtSQL"
+    "vtkGUISupportQtWebkit"
+    "vtkViewsQt"
+    "vtkRenderingQt"
+  )
+endif()
+
+find_package(CURL REQUIRED)
+
+# set(CMAKE_CXX_FLAGS "-O2 -Wall ${CMAKE_CXX_FLAGS}")
+set(CMAKE_CXX_FLAGS "-Wall ${CMAKE_CXX_FLAGS}")
+
+
+catkin_package(
+  INCLUDE_DIRS include
+  LIBRARIES get_file
+  CATKIN_DEPENDS
+  nav_msgs
+  autoware_msgs
+  geometry_msgs
+  std_msgs
+  tf2_geometry_msgs
+  visualization_msgs
+  DEPENDS Boost
+)
+
+include_directories(
+  include
+  ${catkin_INCLUDE_DIRS}
+  ${PCL_IO_INCLUDE_DIRS}
+  ${CURL_INCLUDE_DIRS}
+  ${Boost_INCLUDE_DIR}
+)
+#############
+add_library(get_file
+  lib/map_file/get_file.cpp
+)
+target_link_libraries(get_file ${CURL_LIBRARIES})
+#############
+add_library(GraphicsLibrary lib/distance2lane.cpp)  #图形计算
+#############
+add_library(DrawLibrary lib/draw.cpp)  #绘图
+target_compile_features(DrawLibrary PRIVATE cxx_std_17)
+target_include_directories(DrawLibrary PRIVATE
+    ${PYTHON_INCLUDE_DIR}
+    ${NUMPY_INCLUDE_DIR}
+)
+target_link_libraries(DrawLibrary PRIVATE # 链接依赖库
+    python3.8
+    pthread
+    util
+    dl
+    ${catkin_LIBRARIES}
+)
+#############
+add_executable(points_map_loader nodes/points_map_loader/points_map_loader.cpp)
+target_link_libraries(points_map_loader ${catkin_LIBRARIES} get_file ${CURL_LIBRARIES} ${PCL_IO_LIBRARIES})
+add_dependencies(points_map_loader   ${catkin_EXPORTED_TARGETS})
+#############
+add_executable(vector_map_loader nodes/vector_map_loader/vector_map_loader.cpp)
+target_link_libraries(vector_map_loader ${catkin_LIBRARIES} ${vector_map_LIBRARIES} get_file ${CURL_LIBRARIES})
+add_dependencies(vector_map_loader ${catkin_EXPORTED_TARGETS})
+#############
+add_executable(lanelet2_map_loader nodes/lanelet2_map_loader/lanelet2_map_loader.cpp)
+target_link_libraries(lanelet2_map_loader ${catkin_LIBRARIES} ${Boost_LIBRARIES})
+add_dependencies(lanelet2_map_loader ${catkin_EXPORTED_TARGETS})
+#############
+add_executable(lanelet2_map_visualization nodes/lanelet2_map_loader/lanelet2_map_visualization.cpp)
+target_link_libraries(lanelet2_map_visualization ${catkin_LIBRARIES})
+add_dependencies(lanelet2_map_visualization ${catkin_EXPORTED_TARGETS})
+#############
+add_executable(points_map_filter nodes/points_map_filter/points_map_filter_node.cpp nodes/points_map_filter/points_map_filter.cpp)
+target_link_libraries(points_map_filter ${catkin_LIBRARIES})
+add_dependencies(points_map_filter ${catkin_EXPORTED_TARGETS})
+
+#############
+add_executable(lanelet2_map_parking nodes/lanelet2_map_loader/lanelet2_map_parking.cpp)
+target_include_directories(lanelet2_map_parking PRIVATE
+    ${PYTHON_INCLUDE_DIR}
+    ${NUMPY_INCLUDE_DIR}
+)
+target_link_libraries(lanelet2_map_parking PRIVATE
+    ${catkin_LIBRARIES}
+    python3.8
+    pthread
+    util
+    dl
+    # Python3::Python
+    # Python3::Module
+    # Python3::Numpy
+)
+set_target_properties(lanelet2_map_parking PROPERTIES # 添加链接器选项
+    LINK_FLAGS "-export-dynamic"
+)
+add_dependencies(lanelet2_map_parking ${catkin_EXPORTED_TARGETS})
+
+#############
+add_executable(parking_service nodes/parking/parking_service.cpp)
+target_include_directories(parking_service PRIVATE
+    ${PYTHON_INCLUDE_DIR}
+    ${NUMPY_INCLUDE_DIR}
+)
+target_link_libraries(parking_service PRIVATE
+    ${catkin_LIBRARIES}
+    DrawLibrary
+    GraphicsLibrary
+)
+set_target_properties(parking_service PROPERTIES # 添加链接器选项
+    LINK_FLAGS "-export-dynamic"
+)
+add_dependencies(parking_service ${catkin_EXPORTED_TARGETS})
+
+#############
+add_executable(parking_client nodes/parking/parking_client.cpp)
+
+target_link_libraries(parking_client PRIVATE ${catkin_LIBRARIES})
+
+add_dependencies(parking_client ${catkin_EXPORTED_TARGETS})
+
+
+## Install executables and/or libraries
+install(
+  TARGETS
+    DrawLibrary
+    GraphicsLibrary
+    get_file
+    points_map_loader
+    vector_map_loader
+    lanelet2_map_loader
+    lanelet2_map_visualization
+    lanelet2_map_parking
+    points_map_filter
+    parking_service
+    parking_client
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
+## Install project namespaced headers
+install(DIRECTORY include/${PROJECT_NAME}/
+  DESTINATION ${CATKIN_PACKAGE_INCLUDE_DESTINATION}
+)
+
+install(DIRECTORY launch/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
+  PATTERN ".svn" EXCLUDE
+)

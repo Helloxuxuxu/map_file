@@ -1,0 +1,9 @@
+float64 x   #单位：米        
+float64 y              
+float64 yaw #单位：度deg        
+---
+# 响应：同时包含状态和结果
+bool success       # 操作是否成功（触发或计算成功）
+string message     # 结果描述
+float64 left_distance  #单位：米    
+float64 right_distance    
