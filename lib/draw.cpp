@@ -102,7 +102,7 @@ namespace Draw
         // Add graph title
         plt::title("map lanes and vehicle");
         // 设置 x 轴和 y 轴比例为 1:1
-        // plt::axis("equal");
+        plt::axis("equal");
         // Enable legend.
         plt::legend();
         if (save)
@@ -122,7 +122,7 @@ namespace Draw
                           std::array<double, 2>& rear_right,
                           std::array<double, 2>& rear_left,
                           std::array<double, 2>& front_left,
-                          double lane_situation,
+                          double lane_situation,  //0;         // 左侧为A车道
                           double left_min_index,
                           double right_min_index,
                           bool save = false)

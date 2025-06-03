@@ -44,4 +44,4 @@ rostopic echo /distance2lane
 6.编译
 catkin_make -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_STANDARD=14  #Debug
 catkin_make -DCMAKE_CXX_STANDARD=14  
-
+catkin build map_file

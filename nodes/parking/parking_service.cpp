@@ -17,11 +17,9 @@
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 #include <std_msgs/Float64MultiArray.h>
 
+
 #include "draw.h"
 #include "distance2lane.h"
-
-#include "map_file/LaneDistanceService.h"
-
 // 全局变量
 namespace DC = DistanceCalculation;
 
@@ -37,11 +35,14 @@ double front_right_x, front_right_y;
 double rear_right_x, rear_right_y;
 double rear_left_x, rear_left_y;
 double front_left_x, front_left_y;
+double yaw_set = 0.0;
+double x_set = 0.0;
+double y_set = 0.0;
 bool draw_flag = false;
 
 
 // 地图回调函数（停车触发后使用）
-std::array<double,2> processParkingTask(const autoware_lanelet2_msgs::MapBin &msg, const geometry_msgs::PoseStamped &current_pose)
+void processParkingTask(const autoware_lanelet2_msgs::MapBin& msg, const geometry_msgs::PoseStamped& current_pose)
 {
 
     // lanelet::LaneletMapPtr viz_lanelet_map(new lanelet::LaneletMap);
@@ -114,13 +115,13 @@ std::array<double,2> processParkingTask(const autoware_lanelet2_msgs::MapBin &ms
     double roll, pitch, yaw;
     m.getRPY(roll, pitch, yaw);
     // yaw = atan2(2*(qw*qz + qx*qy), 1 - 2*(qy² + qz²))
-    double yaw_deg = atan2(2.0 * (q.w() * q.z() + q.x() * q.y()),
+    double yaw_direct = atan2(2.0 * (q.w() * q.z() + q.x() * q.y()),
                               1.0 - 2.0 * (q.y() * q.y() + q.z() * q.z()));
-    ROS_INFO("Current yaw_direct --- yaw (deg): %f", yaw_deg * 180.0 / M_PI);
+    ROS_INFO("Current yaw_direct --- yaw (deg): %f", yaw_direct * 180.0 / M_PI);
     ROS_INFO("Current pose --- x: %f, y: %f, yaw (rad): %f",
              current_pose.pose.position.x, current_pose.pose.position.y, yaw);
-
-    auto calculateGlobalPose = [&current_pose, &yaw](double local_x, double local_y)
+    
+    auto calculateGlobalPose =  [&current_pose, &yaw](double local_x, double local_y)
     {
         std::array<double, 2> global_coords;
         global_coords[0] = current_pose.pose.position.x + local_x * cos(yaw) - local_y * sin(yaw);
@@ -132,16 +133,16 @@ std::array<double,2> processParkingTask(const autoware_lanelet2_msgs::MapBin &ms
     std::array<double, 2> rear_left_coords = calculateGlobalPose(rear_left_x, rear_left_y);
     std::array<double, 2> front_left_coords = calculateGlobalPose(front_left_x, front_left_y);
 
-    std::array<double, 5> min_distance =
+    std::array<double,5> min_distance =
         DC::calculateMinDistancesToLanes(front_right_coords, rear_right_coords, rear_left_coords, front_left_coords, left_x, left_y, right_x, right_y);
     ROS_INFO("\033[34mmin_distance: %f, %f", min_distance[0], min_distance[1]);
-    if (draw_flag)
-    {
-        Draw::plotAndSaveLanes(left_x, left_y, right_x, right_y, center_x, center_y,
-                               front_right_coords, rear_right_coords, rear_left_coords, front_left_coords, min_distance[2], min_distance[3], min_distance[4], false);
+    if (draw_flag){
+        Draw::plotAndSaveLanes(left_x, left_y, right_x, right_y, center_x, center_y, 
+            front_right_coords, rear_right_coords, rear_left_coords, front_left_coords, min_distance[2], min_distance[3], min_distance[4],true);
     }
-
-    // 创建并填充 Float64MultiArray 消息
+    
+    
+        // 创建并填充 Float64MultiArray 消息
     std_msgs::Float64MultiArray distance_msg;
     distance_msg.data.clear();
     distance_msg.data.push_back(current_pose.pose.position.x);
@@ -149,14 +150,14 @@ std::array<double,2> processParkingTask(const autoware_lanelet2_msgs::MapBin &ms
     distance_msg.data.push_back(yaw);
     distance_msg.data.push_back(min_distance[0]);
     distance_msg.data.push_back(min_distance[1]);
+    
     distance_pub.publish(distance_msg);
-
-    return std::array<double, 2> {min_distance[0], min_distance[1]};
+    return;
 }
 
 // 停车服务处理函数
-bool handleParkRequest(map_file::LaneDistanceService::Request &req,
-                       map_file::LaneDistanceService::Response &res)
+bool handleParkRequest(std_srvs::Trigger::Request &req,
+                       std_srvs::Trigger::Response &res)
 {
     if (parking_triggered)
     {
@@ -171,7 +172,7 @@ bool handleParkRequest(map_file::LaneDistanceService::Request &req,
 
     // 修改订阅者的回调函数（如果需要动态修改）
     static ros::NodeHandle nh_("~"); // 使用私有命名空间的NodeHandle
-    double wait_time = 1.0;          // 等待时间（秒）
+    double wait_time = 1.0;         // 等待时间（秒）
     autoware_lanelet2_msgs::MapBin::ConstPtr map_msg =
         ros::topic::waitForMessage<autoware_lanelet2_msgs::MapBin>(
             "/lanelet_map_bin",
@@ -187,35 +188,55 @@ bool handleParkRequest(map_file::LaneDistanceService::Request &req,
         ROS_WARN("Map Message waiting timed out (%f seconds)", wait_time);
     }
 
-    if (map_msg)
+    geometry_msgs::PoseStamped::ConstPtr pose_msg =
+        ros::topic::waitForMessage<geometry_msgs::PoseStamped>(
+            "/current_pose",
+            nh_,
+            ros::Duration(wait_time));
+    if (pose_msg)
     {
+        // 处理消息
+        ROS_INFO("\033[34mReceived a pose message, timestamp: %f", pose_msg->header.stamp.toSec());
+    }
+    else
+    {
+        ROS_WARN("Pose Message waiting timed out (%f seconds)", wait_time);
+    }
+
+    
+    if (map_msg && pose_msg)
+    {
+        processParkingTask(*map_msg, *pose_msg);
+        res.success = true;
+        res.message = "\033[34mThe parking process has been finished.";
+    }
+    else if (map_msg && !pose_msg)
+    {
+       // 用于暂时调试，现在还未编写发布到/current_pose的代码
         geometry_msgs::PoseStamped default_pose_msg;
         default_pose_msg.header.stamp = ros::Time::now();
         default_pose_msg.header.frame_id = "map";
-        default_pose_msg.pose.position.x = req.x;
-        default_pose_msg.pose.position.y = req.y;
+        default_pose_msg.pose.position.x = x_set;
+        default_pose_msg.pose.position.y = y_set;
         default_pose_msg.pose.position.z = 0.1;
-        double yaw = req.yaw / 180.0 * M_PI; //rad
+        // 将 20 度转换为弧度
+        double yaw = yaw_set * M_PI / 180.0;
 
         // 创建 tf2 四元数对象
         tf2::Quaternion q;
-        q.setRPY(0, 0, yaw); // 绕 z 轴旋转，roll 和 pitch 为 0
+        q.setRPY(0, 0, yaw);  // 绕 z 轴旋转，roll 和 pitch 为 0
         q.normalize();
 
         // 将 tf2 四元数转换为 geometry_msgs::Quaternion
         default_pose_msg.pose.orientation = tf2::toMsg(q);
-
-        std::array<double,2> MinLaneDistance = processParkingTask(*map_msg, default_pose_msg);
-        res.left_distance = MinLaneDistance[0];
-        res.right_distance = MinLaneDistance[1];
+        
+        processParkingTask(*map_msg, default_pose_msg);
         res.success = true;
-        res.message = "\033[34mThe parking computation process has been completed.";
+        res.message = "\033[34mThe parking process has been completed, but this is just test code.";
     }
     else
     {
         ROS_ERROR("Failed to get map or pose message within the specified time.");
-        res.left_distance = -1;
-        res.right_distance = -1;
         res.success = false;
         res.message = "Failed to get map or pose message within the specified time.";
     }
@@ -229,52 +250,54 @@ int main(int argc, char **argv)
     ros::NodeHandle nh;
     ros::NodeHandle nh_("~");
     // 获取角点坐标参数
-    if (true)
-    {
-        if (!nh_.getParam("front_right_x", front_right_x))
-        {
+    if(true){
+        if (!nh_.getParam("front_right_x", front_right_x)) {
             ROS_WARN("Failed to get front_right_x parameter, using default value 0.");
             front_right_x = 0;
         }
-        if (!nh_.getParam("front_right_y", front_right_y))
-        {
+        if (!nh_.getParam("front_right_y", front_right_y)) {
             ROS_WARN("Failed to get front_right_y parameter, using default value 0.");
             front_right_y = 0;
         }
-        if (!nh_.getParam("rear_right_x", rear_right_x))
-        {
+        if (!nh_.getParam("rear_right_x", rear_right_x)) {
             ROS_WARN("Failed to get rear_right_x parameter, using default value 0.");
             rear_right_x = 0;
         }
-        if (!nh_.getParam("rear_right_y", rear_right_y))
-        {
+        if (!nh_.getParam("rear_right_y", rear_right_y)) {
             ROS_WARN("Failed to get rear_right_y parameter, using default value 0.");
             rear_right_y = 0;
         }
-        if (!nh_.getParam("rear_left_x", rear_left_x))
-        {
+        if (!nh_.getParam("rear_left_x", rear_left_x)) {
             ROS_WARN("Failed to get rear_left_x parameter, using default value 0.");
             rear_left_x = 0;
         }
-        if (!nh_.getParam("rear_left_y", rear_left_y))
-        {
+        if (!nh_.getParam("rear_left_y", rear_left_y)) {
             ROS_WARN("Failed to get rear_left_y parameter, using default value 0.");
             rear_left_y = 0;
         }
-        if (!nh_.getParam("front_left_x", front_left_x))
-        {
+        if (!nh_.getParam("front_left_x", front_left_x)) {
             ROS_WARN("Failed to get front_left_x parameter, using default value 0.");
             front_left_x = 0;
         }
-        if (!nh_.getParam("front_left_y", front_left_y))
-        {
+        if (!nh_.getParam("front_left_y", front_left_y)) {
             ROS_WARN("Failed to get front_left_y parameter, using default value 0.");
             front_left_y = 0;
         }
-        if (!nh_.getParam("draw_flag", draw_flag))
-        {
-            ROS_WARN("Failed to get draw_flag parameter, using default value false.");
-            draw_flag = false;
+        if (!nh_.getParam("yaw_set", yaw_set)) {
+            ROS_WARN("Failed to get yaw_set parameter, using default value 0.");
+            yaw_set = 0;
+        }
+        if (!nh_.getParam("x_set", x_set)) {
+            ROS_WARN("Failed to get x_set parameter, using default value 0.");
+            x_set = 0;
+        }
+        if (!nh_.getParam("y_set", y_set)) {
+            ROS_WARN("Failed to get y_set parameter, using default value 0.");
+            y_set = 0;
+        }
+        if(!nh_.getParam("draw_flag", draw_flag)){
+            ROS_WARN("Failed to get draw_flag parameter, using default value true.");
+            draw_flag = true;
         }
 
         // 打印获取到的角点坐标
@@ -283,9 +306,9 @@ int main(int argc, char **argv)
         ROS_INFO("Rear Left: (%f, %f)", rear_left_x, rear_left_y);
         ROS_INFO("Front Left: (%f, %f)", front_left_x, front_left_y);
     }
-    // 创建距离车道发布者
+    //创建距离车道发布者
     distance_pub = nh.advertise<std_msgs::Float64MultiArray>("distance2lane", 1);
-    //  创建停车服务
+    // 创建停车服务
     ros::ServiceServer service = nh.advertiseService("parking_service", handleParkRequest);
     if (!service)
     {

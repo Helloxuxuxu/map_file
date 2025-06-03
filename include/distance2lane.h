@@ -27,6 +27,12 @@ namespace DistanceCalculation {
             const std::vector<double>& right_x,
             const std::vector<double>& right_y
         );
+    std::array<double, 4> DistanceCorner2MidLanes(const std::array<double, 2>& front_right_coords,
+        const std::array<double, 2>& rear_right_coords,
+        const std::array<double, 2>& rear_left_coords,
+        const std::array<double, 2>& front_left_coords,
+        const std::vector<double>& center_x,
+        const std::vector<double>& center_y);
     }
     
 #endif // DISTANCE2LANE_H

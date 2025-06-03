@@ -118,7 +118,7 @@ int main(int argc, char** argv)
   // map_bin_pub.publish(map_bin_msg);
   // ros::spin();
     // 设置发布频率为 1/3 Hz，即每 3 秒发布一次
-  ros::Rate rate(0.2);
+  ros::Rate rate(5.0);
   while (ros::ok()) {
       map_bin_msg.header.stamp = ros::Time::now(); // 更新消息时间戳
       map_bin_pub.publish(map_bin_msg);

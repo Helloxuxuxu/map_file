@@ -199,6 +199,26 @@ target_link_libraries(parking_client PRIVATE ${catkin_LIBRARIES})
 
 add_dependencies(parking_client ${catkin_EXPORTED_TARGETS})
 
+#############
+add_executable(car_tf_publisher_test nodes/parking/car_tf_publisher_test.cpp)
+target_link_libraries(car_tf_publisher_test ${catkin_LIBRARIES})
+add_dependencies(car_tf_publisher_test ${catkin_EXPORTED_TARGETS})
+
+#############
+add_executable(corner_distance_publisher nodes/parking/corner_distance_publisher.cpp)
+target_include_directories(corner_distance_publisher PRIVATE
+    ${Python3_INCLUDE_DIRS}
+    ${Python3_NumPy_INCLUDE_DIRS}
+)
+target_link_libraries(corner_distance_publisher PRIVATE
+    ${catkin_LIBRARIES}
+    DrawLibrary
+    GraphicsLibrary
+)
+set_target_properties(corner_distance_publisher PROPERTIES # 添加链接器选项
+    LINK_FLAGS "-export-dynamic"
+)
+add_dependencies(corner_distance_publisher ${catkin_EXPORTED_TARGETS})
 
 ## Install executables and/or libraries
 install(
@@ -214,6 +234,8 @@ install(
     points_map_filter
     parking_service
     parking_client
+    car_tf_publisher_test
+    corner_distance_publisher
   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
